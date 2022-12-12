@@ -8,13 +8,6 @@ pub struct InfUInt {
     bits: BitVec<u8, Lsb0>,
 }
 
-pub fn replace_nth_char_safe(s: &String, idx: usize, newchar: char) -> String {
-    s.chars()
-        .enumerate()
-        .map(|(i, c)| if i == idx { newchar } else { c })
-        .collect()
-}
-
 #[macro_export]
 macro_rules! infuint {
     ($value:expr) => {{
@@ -32,7 +25,7 @@ macro_rules! infuint {
                 t = ((old_t * 10 + c) & 1);
                 c = (c + old_t * 10) >> 1;
                 old_t = t;
-                s = crate::infinite_integer::replace_nth_char_safe(&s, i, c.to_string().chars().next().unwrap());
+                s = crate::utils::replace_nth_char_safe(&s, i, c.to_string().chars().next().unwrap());
                 i += 1;
             }
             bits.push(t == 1);

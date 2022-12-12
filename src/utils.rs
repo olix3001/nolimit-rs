@@ -98,3 +98,10 @@ pub fn power_2(n: String) -> String {
     }
     s
 }
+
+pub fn replace_nth_char_safe(s: &String, idx: usize, newchar: char) -> String {
+    s.chars()
+        .enumerate()
+        .map(|(i, c)| if i == idx { newchar } else { c })
+        .collect()
+}

@@ -1,5 +1,5 @@
-mod infinite_integer;
-pub use infinite_integer::InfUInt;
+mod inf_uint;
+pub use inf_uint::InfUInt;
 mod utils;
 
 #[cfg(test)]
