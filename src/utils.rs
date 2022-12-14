@@ -1,3 +1,7 @@
+use std::fmt::Display;
+
+use bitvec::vec::BitVec;
+
 pub fn add_decimal_strings(a: String, b: String) -> String {
     let mut s = String::new();
     let mut carry = 0;
@@ -99,9 +103,54 @@ pub fn power_2(n: String) -> String {
     s
 }
 
-pub fn replace_nth_char_safe(s: &String, idx: usize, newchar: char) -> String {
+pub fn replace_nth_char(s: &String, idx: usize, newchar: char) -> String {
     s.chars()
         .enumerate()
         .map(|(i, c)| if i == idx { newchar } else { c })
         .collect()
+}
+
+// ====< Macros >====
+#[macro_export]
+macro_rules! fit_bits {
+    ($bits:expr) => {
+        $bits.reverse();
+        $bits.resize($bits.len() - $bits.trailing_zeros(), false);
+        $bits.reverse()
+    };
+}
+
+#[macro_export]
+macro_rules! fit_together {
+    ($a:expr, $b: expr) => {
+        #[cfg(not(feature = "size-opt"))]
+        {
+            fit_bits!($a);
+            fit_bits!($b);
+        }
+
+        if $a.len() > $b.len() {
+            $b.resize($a.len(), false);
+        } else if $b.len() > $a.len() {
+            $a.resize($b.len(), false);
+        }
+    };
+}
+
+// ====< Debug >====
+pub trait BitVecDebug {
+    fn debug(&self) -> String;
+}
+impl BitVecDebug for BitVec<u8> {
+    fn debug(&self) -> String {
+        let mut s = String::new();
+        for i in 0..self.len() {
+            if self[i] {
+                s = format!("{}1", s);
+            } else {
+                s = format!("{}0", s);
+            }
+        }
+        s
+    }
 }
