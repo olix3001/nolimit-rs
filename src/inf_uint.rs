@@ -12,7 +12,7 @@ use std::{
 use bitvec::{prelude::*, vec::BitVec};
 
 use crate::{
-    fit_bits,
+    fit_bits, fit_together,
     utils::{power_2, BitVecDebug},
 };
 
@@ -77,13 +77,18 @@ impl InfUInt {
         Self { bits }
     }
 
+    pub fn from_vec(bits: Vec<bool>) -> Self {
+        Self {
+            bits: bits.into_iter().collect(),
+        }
+    }
+
     pub fn num_bits(&self) -> usize {
         self.bits.len()
     }
 
     pub fn fit(&mut self) -> &mut Self {
-        self.bits
-            .resize(self.bits.len() - self.bits.leading_zeros(), false);
+        fit_bits!(self.bits);
         self
     }
 }
@@ -118,7 +123,7 @@ impl fmt::Debug for InfUInt {
             s = format!("{}{}", if *bit { "1" } else { "0" }, s);
         }
 
-        write!(f, "{}", s)
+        write!(f, "0b{}", s)
     }
 }
 
@@ -129,12 +134,6 @@ impl Add for InfUInt {
     fn add(self, rhs: Self) -> Self::Output {
         let mut bits = self.bits.clone();
         let mut rhs_bits = rhs.bits.clone();
-
-        #[cfg(feature = "size-opt")]
-        {
-            fit_bits!(bits);
-            fit_bits!(rhs_bits);
-        }
 
         let mut carry = false;
 
@@ -166,12 +165,6 @@ impl Sub for InfUInt {
         let mut bits = self.bits.clone();
         let mut rhs_bits = rhs.bits.clone();
 
-        #[cfg(feature = "size-opt")]
-        {
-            fit_bits!(bits);
-            fit_bits!(rhs_bits);
-        }
-
         let mut carry = false;
 
         if bits.len() < rhs_bits.len() {
@@ -186,7 +179,6 @@ impl Sub for InfUInt {
             *bit = sum;
         }
 
-        fit_bits!(bits);
         Self::new(bits)
     }
 }
@@ -210,12 +202,6 @@ impl Mul for InfUInt {
                 rhs_bits.push(false);
                 return Self::new(rhs_bits);
             }
-        }
-
-        #[cfg(feature = "size-opt")]
-        {
-            fit_bits!(bits);
-            fit_bits!(rhs_bits);
         }
 
         if bits.len() < rhs_bits.len() {
@@ -255,20 +241,20 @@ impl Div for InfUInt {
         if self < rhs {
             return Self::new(BitVec::new());
         }
-        let mut bits = self.bits.clone();
-        let mut rhs_bits = rhs.bits.clone();
-
-        #[cfg(feature = "size-opt")]
-        {
-            fit_bits!(bits);
-            fit_bits!(rhs_bits);
+        if self == rhs {
+            return infuint!(1);
         }
 
-        if bits.len() < rhs_bits.len() {
-            bits.resize(rhs_bits.len(), false);
+        let mut a = if self > rhs {
+            self.clone()
         } else {
-            rhs_bits.resize(bits.len(), false);
-        }
+            rhs.clone()
+        };
+        let b = if self > rhs {
+            rhs.clone()
+        } else {
+            self.clone()
+        };
 
         // Opt for 2
         #[cfg(feature = "opt")]
@@ -283,8 +269,15 @@ impl Div for InfUInt {
             }
         }
 
-        // Divide using Goldschmidt's algorithm
-        return Self::new(BitVec::new());
+        // TODO: Optimize
+        let mut result = infuint!(0);
+
+        while a >= b {
+            a -= b.clone();
+            result += infuint!(1);
+        }
+
+        result
     }
 }
 create_assign_operator!(DivAssign, div_assign, div);
@@ -309,12 +302,6 @@ impl BitAnd for InfUInt {
         let mut bits = self.bits.clone();
         let mut rhs_bits = rhs.bits.clone();
 
-        #[cfg(feature = "size-opt")]
-        {
-            fit_bits!(bits);
-            fit_bits!(rhs_bits);
-        }
-
         if bits.len() < rhs_bits.len() {
             bits.resize(rhs_bits.len(), false);
         } else {
@@ -337,12 +324,6 @@ impl BitOr for InfUInt {
         let mut bits = self.bits.clone();
         let mut rhs_bits = rhs.bits.clone();
 
-        #[cfg(feature = "size-opt")]
-        {
-            fit_bits!(bits);
-            fit_bits!(rhs_bits);
-        }
-
         if bits.len() < rhs_bits.len() {
             bits.resize(rhs_bits.len(), false);
         } else {
@@ -364,12 +345,6 @@ impl BitXor for InfUInt {
     fn bitxor(self, rhs: Self) -> Self::Output {
         let mut bits = self.bits.clone();
         let mut rhs_bits = rhs.bits.clone();
-
-        #[cfg(feature = "size-opt")]
-        {
-            fit_bits!(bits);
-            fit_bits!(rhs_bits);
-        }
 
         if bits.len() < rhs_bits.len() {
             bits.resize(rhs_bits.len(), false);
@@ -413,9 +388,13 @@ impl PartialEq for InfUInt {
     fn eq(&self, other: &Self) -> bool {
         let mut a = self.bits.clone();
         let mut b = other.bits.clone();
-        fit_bits!(a);
-        fit_bits!(b);
-        a == b
+        fit_together!(a, b);
+        for i in 0..a.len() {
+            if a[i] != b[i] {
+                return false;
+            }
+        }
+        return true;
     }
 }
 impl Eq for InfUInt {}
@@ -433,7 +412,20 @@ impl PartialOrd for InfUInt {
         let mut b = other.bits.clone();
         fit_bits!(a);
         fit_bits!(b);
-        a < b
+        if a.len() < b.len() {
+            return true;
+        } else if a.len() > b.len() {
+            return false;
+        } else {
+            for i in 0..a.len() {
+                if a[i] && !b[i] {
+                    return false;
+                } else if !a[i] && b[i] {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     fn le(&self, other: &Self) -> bool {
@@ -441,7 +433,11 @@ impl PartialOrd for InfUInt {
         let mut b = other.bits.clone();
         fit_bits!(a);
         fit_bits!(b);
-        a <= b
+        if a == b {
+            return true;
+        } else {
+            return self.lt(other);
+        }
     }
 
     fn gt(&self, other: &Self) -> bool {
@@ -449,7 +445,20 @@ impl PartialOrd for InfUInt {
         let mut b = other.bits.clone();
         fit_bits!(a);
         fit_bits!(b);
-        a > b
+        if a.len() > b.len() {
+            return true;
+        } else if a.len() < b.len() {
+            return false;
+        } else {
+            for i in 0..a.len() {
+                if a[i] && !b[i] {
+                    return true;
+                } else if !a[i] && b[i] {
+                    return false;
+                }
+            }
+            return false;
+        }
     }
 
     fn ge(&self, other: &Self) -> bool {
@@ -457,7 +466,11 @@ impl PartialOrd for InfUInt {
         let mut b = other.bits.clone();
         fit_bits!(a);
         fit_bits!(b);
-        a >= b
+        if a == b {
+            return true;
+        } else {
+            return self.gt(other);
+        }
     }
 }
 impl Ord for InfUInt {
@@ -473,9 +486,34 @@ impl Ord for InfUInt {
 // ====< Tests >====
 #[cfg(test)]
 mod tests {
+    use crate::InfUInt;
 
     #[cfg(feature = "benchmark")]
     extern crate test;
+
+    #[test]
+    fn fit_no_change() {
+        assert!(
+            *InfUInt::from_vec(vec![true, false, true, false]).fit()
+                == InfUInt::from_vec(vec![true, false, true, false])
+        );
+
+        assert!(
+            *InfUInt::from_vec(vec![false, false, false, false]).fit() == InfUInt::from_vec(vec![])
+        );
+
+        assert!(
+            *InfUInt::from_vec(vec![true, true, true, true]).fit()
+                == InfUInt::from_vec(vec![true, true, true, true])
+        );
+
+        assert!(
+            *InfUInt::from_vec(vec![false, false, false, true]).fit()
+                == InfUInt::from_vec(vec![true]),
+            "Got {:?}",
+            InfUInt::from_vec(vec![false, false, false, true]).fit()
+        );
+    }
 
     #[test]
     fn display_infuint() {
@@ -483,11 +521,12 @@ mod tests {
             format!("{}", infuint!(1234567891011121314151617181920))
                 == "1234567891011121314151617181920"
         );
+        assert!(format!("{}", infuint!(900)) == "900");
     }
 
     #[test]
     fn debug_infuint() {
-        assert!(format!("{:?}", infuint!(12345)) == "11000000111001");
+        assert!(format!("{:?}", infuint!(12345)) == "0b11000000111001");
     }
 
     #[test]
@@ -516,8 +555,20 @@ mod tests {
         assert!(
             infuint!(1234567891011121314151617181920) - infuint!(1234567891011121314151617181920)
                 == infuint!(0),
-            "{}",
+            "1: {}",
             infuint!(1234567891011121314151617181920) - infuint!(1234567891011121314151617181920)
+        );
+
+        assert!(
+            infuint!(1000) - infuint!(100) == infuint!(900),
+            "2: {}",
+            infuint!(1000) - infuint!(100)
+        );
+        assert!(
+            infuint!(8200) - infuint!(100) == infuint!(8100),
+            "3: {:?} ({:?})",
+            infuint!(8200) - infuint!(100),
+            infuint!(8100)
         );
     }
 
@@ -535,12 +586,14 @@ mod tests {
     fn div_infuint() {
         assert!(
             infuint!(1234567891011121314151617181920) / infuint!(1234567891011121314151617181920)
-                == infuint!(1)
+                == infuint!(1),
+            "1: {}",
+            infuint!(1234567891011121314151617181920) / infuint!(1234567891011121314151617181920)
         );
         assert!(
-            infuint!(100000) / infuint!(100) == infuint!(1000),
-            "{}",
-            infuint!(100000) / infuint!(100)
+            infuint!(10000) / infuint!(100) == infuint!(100),
+            "2: {}",
+            infuint!(10000) / infuint!(100)
         );
     }
 
@@ -548,7 +601,7 @@ mod tests {
     fn assign_infuint() {
         let mut a = infuint!(1234567891011121314151617181920);
         a += infuint!(1234567891011121314151617181920);
-        assert!(a == infuint!(1234567891011121314151617181920));
+        assert!(a == infuint!(2469135782022242628303234363840));
     }
 
     // ====< Benchmarks >====
@@ -589,6 +642,26 @@ mod tests {
             let a = infuint!(1234567891011121314151617181920);
             let b = infuint!(2);
             a * b
+        });
+    }
+
+    #[cfg(feature = "benchmark")]
+    #[bench]
+    fn bench_div(b: &mut test::Bencher) {
+        b.iter(|| {
+            let a = infuint!(100000);
+            let b = infuint!(100);
+            a / b
+        });
+    }
+
+    #[cfg(all(feature = "benchmark", feature = "opt"))]
+    #[bench]
+    fn bench_div_2_opt(b: &mut test::Bencher) {
+        b.iter(|| {
+            let a = infuint!(1234567891011121314151617181920);
+            let b = infuint!(2);
+            a / b
         });
     }
 }
