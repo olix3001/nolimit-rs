@@ -25,7 +25,7 @@ pub struct InfUInt {
 #[macro_export]
 macro_rules! infuint {
     ($value:tt) => {
-        infuint!(stringify!($value))
+        crate::infuint!(stringify!($value))
     };
     ($value:expr) => {{
         use bitvec::{prelude::*, bitvec};
@@ -79,8 +79,12 @@ impl InfUInt {
 
     pub fn from_vec(bits: Vec<bool>) -> Self {
         Self {
-            bits: bits.into_iter().collect(),
+            bits: bits.into_iter().rev().collect(),
         }
+    }
+
+    pub fn zero() -> Self {
+        Self::new(BitVec::new())
     }
 
     pub fn num_bits(&self) -> usize {
