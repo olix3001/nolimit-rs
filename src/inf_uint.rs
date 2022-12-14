@@ -3,8 +3,10 @@
 use core::fmt;
 use std::{
     cmp::Ordering,
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
-    process::Output,
+    ops::{
+        Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Div,
+        DivAssign, Mul, MulAssign, Not, Shl, ShlAssign, Shr, ShrAssign, Sub, SubAssign,
+    },
 };
 
 use bitvec::{prelude::*, vec::BitVec};
@@ -57,12 +59,15 @@ macro_rules! infuint {
 }
 
 macro_rules! create_assign_operator {
-    ($assign:ident, $assign_method:ident, $method:ident) => {
+    ($assign:ty, $assign_method:ident, $method:ident, $rhst:ty) => {
         impl $assign for InfUInt {
-            fn $assign_method(&mut self, rhs: Self) {
+            fn $assign_method(&mut self, rhs: $rhst) {
                 *self = self.clone().$method(rhs);
             }
         }
+    };
+    ($assign:ident, $assign_method:ident, $method:ident) => {
+        create_assign_operator!($assign, $assign_method, $method, Self);
     };
 }
 
@@ -265,23 +270,143 @@ impl Div for InfUInt {
             rhs_bits.resize(bits.len(), false);
         }
 
-        let mut result = Self::new(BitVec::new());
-        let mut temp = Self::new(BitVec::new());
-
-        for bit in bits.iter() {
-            temp.bits.push(*bit);
-            if temp >= rhs {
-                temp -= rhs.clone();
-                result.bits.push(true);
-            } else {
-                result.bits.push(false);
+        // Opt for 2
+        #[cfg(feature = "opt")]
+        {
+            if rhs == infuint!(2) {
+                bits.pop();
+                return Self::new(bits);
+            }
+            if self == infuint!(2) {
+                rhs_bits.pop();
+                return Self::new(rhs_bits);
             }
         }
 
-        fit_bits!(result.bits);
-        result
+        // Divide using Goldschmidt's algorithm
+        return Self::new(BitVec::new());
     }
 }
+create_assign_operator!(DivAssign, div_assign, div);
+
+// ====< Bit Manipulation >====
+impl Not for InfUInt {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        let mut bits = self.bits.clone();
+        for mut bit in bits.iter_mut() {
+            *bit = !*bit;
+        }
+        Self::new(bits)
+    }
+}
+
+impl BitAnd for InfUInt {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        let mut bits = self.bits.clone();
+        let mut rhs_bits = rhs.bits.clone();
+
+        #[cfg(feature = "size-opt")]
+        {
+            fit_bits!(bits);
+            fit_bits!(rhs_bits);
+        }
+
+        if bits.len() < rhs_bits.len() {
+            bits.resize(rhs_bits.len(), false);
+        } else {
+            rhs_bits.resize(bits.len(), false);
+        }
+
+        for (i, mut bit) in bits.iter_mut().enumerate() {
+            *bit = *bit && rhs_bits[i];
+        }
+
+        Self::new(bits)
+    }
+}
+create_assign_operator!(BitAndAssign, bitand_assign, bitand);
+
+impl BitOr for InfUInt {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        let mut bits = self.bits.clone();
+        let mut rhs_bits = rhs.bits.clone();
+
+        #[cfg(feature = "size-opt")]
+        {
+            fit_bits!(bits);
+            fit_bits!(rhs_bits);
+        }
+
+        if bits.len() < rhs_bits.len() {
+            bits.resize(rhs_bits.len(), false);
+        } else {
+            rhs_bits.resize(bits.len(), false);
+        }
+
+        for (i, mut bit) in bits.iter_mut().enumerate() {
+            *bit = *bit || rhs_bits[i];
+        }
+
+        Self::new(bits)
+    }
+}
+create_assign_operator!(BitOrAssign, bitor_assign, bitor);
+
+impl BitXor for InfUInt {
+    type Output = Self;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        let mut bits = self.bits.clone();
+        let mut rhs_bits = rhs.bits.clone();
+
+        #[cfg(feature = "size-opt")]
+        {
+            fit_bits!(bits);
+            fit_bits!(rhs_bits);
+        }
+
+        if bits.len() < rhs_bits.len() {
+            bits.resize(rhs_bits.len(), false);
+        } else {
+            rhs_bits.resize(bits.len(), false);
+        }
+
+        for (i, mut bit) in bits.iter_mut().enumerate() {
+            *bit = *bit ^ rhs_bits[i];
+        }
+
+        Self::new(bits)
+    }
+}
+create_assign_operator!(BitXorAssign, bitxor_assign, bitxor);
+
+impl Shl<usize> for InfUInt {
+    type Output = Self;
+
+    fn shl(self, rhs: usize) -> Self::Output {
+        let mut bits = self.bits.clone();
+        bits.resize(bits.len() + rhs, false);
+        Self::new(bits)
+    }
+}
+create_assign_operator!(ShlAssign<usize>, shl_assign, shl, usize);
+
+impl Shr<usize> for InfUInt {
+    type Output = Self;
+
+    fn shr(self, rhs: usize) -> Self::Output {
+        let mut bits = self.bits.clone();
+        bits.resize(bits.len() - rhs, false);
+        Self::new(bits)
+    }
+}
+create_assign_operator!(ShrAssign<usize>, shr_assign, shr, usize);
 
 // ====< Comparisons >====
 impl PartialEq for InfUInt {
