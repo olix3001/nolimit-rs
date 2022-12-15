@@ -19,3 +19,23 @@ The idea is to use bit vectors which can fit any number. That's it. The only thi
 # Speed
 
 It's really slow, but I don't care rn.
+
+# Techinical
+
+## How to run tests
+
+```bash
+$ git clone
+$ cd inf-num
+$ cargo test
+```
+
+## How to run benchmarks
+
+You need to have the nightly version of rust installed.
+
+```bash
+$ git clone
+$ cd inf-num
+$ cargo +nightly bench --features benchmark
+```

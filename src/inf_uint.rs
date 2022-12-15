@@ -83,6 +83,16 @@ impl InfUInt {
         }
     }
 
+    pub fn to_usize(&self) -> usize {
+        let mut n = 0;
+        for (i, bit) in self.bits.iter().enumerate() {
+            if *bit {
+                n += 2usize.pow(i as u32);
+            }
+        }
+        n
+    }
+
     pub fn zero() -> Self {
         Self::new(BitVec::new())
     }
@@ -370,7 +380,9 @@ impl Shl<usize> for InfUInt {
 
     fn shl(self, rhs: usize) -> Self::Output {
         let mut bits = self.bits.clone();
+        bits.reverse();
         bits.resize(bits.len() + rhs, false);
+        bits.reverse();
         Self::new(bits)
     }
 }
@@ -381,7 +393,9 @@ impl Shr<usize> for InfUInt {
 
     fn shr(self, rhs: usize) -> Self::Output {
         let mut bits = self.bits.clone();
+        bits.reverse();
         bits.resize(bits.len() - rhs, false);
+        bits.reverse();
         Self::new(bits)
     }
 }
@@ -421,7 +435,7 @@ impl PartialOrd for InfUInt {
         } else if a.len() > b.len() {
             return false;
         } else {
-            for i in 0..a.len() {
+            for i in (0..a.len()).rev() {
                 if a[i] && !b[i] {
                     return false;
                 } else if !a[i] && b[i] {
@@ -454,7 +468,7 @@ impl PartialOrd for InfUInt {
         } else if a.len() < b.len() {
             return false;
         } else {
-            for i in 0..a.len() {
+            for i in (0..a.len()).rev() {
                 if a[i] && !b[i] {
                     return true;
                 } else if !a[i] && b[i] {
@@ -489,14 +503,14 @@ impl Ord for InfUInt {
 
 // ====< Tests >====
 #[cfg(test)]
-mod tests {
+mod inf_uint_tests {
     use crate::InfUInt;
 
     #[cfg(feature = "benchmark")]
     extern crate test;
 
     #[test]
-    fn fit_no_change() {
+    fn test_inf_uint_fit() {
         assert!(
             *InfUInt::from_vec(vec![true, false, true, false]).fit()
                 == InfUInt::from_vec(vec![true, false, true, false])
@@ -520,7 +534,7 @@ mod tests {
     }
 
     #[test]
-    fn display_infuint() {
+    fn test_inf_uint_display() {
         assert!(
             format!("{}", infuint!(1234567891011121314151617181920))
                 == "1234567891011121314151617181920"
@@ -529,12 +543,12 @@ mod tests {
     }
 
     #[test]
-    fn debug_infuint() {
+    fn test_inf_uint_debug() {
         assert!(format!("{:?}", infuint!(12345)) == "0b11000000111001");
     }
 
     #[test]
-    fn eq_infuint() {
+    fn test_inf_uint_eq() {
         assert!(
             infuint!(1234567891011121314151617181920) == infuint!(1234567891011121314151617181920)
         );
@@ -545,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    fn add_infuint() {
+    fn test_inf_uint_add() {
         assert!(
             infuint!(1234567891011121314151617181920) + infuint!(1234567891011121314151617181920)
                 == infuint!(2469135782022242628303234363840),
@@ -555,7 +569,7 @@ mod tests {
     }
 
     #[test]
-    fn sub_infuint() {
+    fn test_inf_uint_sub() {
         assert!(
             infuint!(1234567891011121314151617181920) - infuint!(1234567891011121314151617181920)
                 == infuint!(0),
@@ -577,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    fn mul_infuint() {
+    fn test_inf_uint_mul() {
         assert!(
             infuint!(1234567891011121314151617181920) * infuint!(1234567891011121314151617181920)
                 == infuint!(1524157877515647915714744640673134422038842655613362374886400),
@@ -587,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn div_infuint() {
+    fn test_inf_uint_div() {
         assert!(
             infuint!(1234567891011121314151617181920) / infuint!(1234567891011121314151617181920)
                 == infuint!(1),
@@ -602,16 +616,98 @@ mod tests {
     }
 
     #[test]
-    fn assign_infuint() {
+    fn test_inf_uint_assign() {
         let mut a = infuint!(1234567891011121314151617181920);
         a += infuint!(1234567891011121314151617181920);
         assert!(a == infuint!(2469135782022242628303234363840));
     }
 
+    #[test]
+    fn test_inf_uint_cmp() {
+        assert!(
+            infuint!(1234567891011121314151617181920) > infuint!(1234567891011121314151617181919)
+        );
+        assert!(
+            infuint!(1234567891011121314151617181920) < infuint!(1234567891011121314151617181921)
+        );
+        assert!(
+            infuint!(1234567891011121314151617181920) >= infuint!(1234567891011121314151617181919)
+        );
+        assert!(
+            infuint!(1234567891011121314151617181920) <= infuint!(1234567891011121314151617181921)
+        );
+        assert!(
+            infuint!(1234567891011121314151617181920) >= infuint!(1234567891011121314151617181920)
+        );
+        assert!(
+            infuint!(1234567891011121314151617181920) <= infuint!(1234567891011121314151617181920)
+        );
+    }
+
+    #[test]
+    fn test_inf_uint_and() {
+        assert!(
+            infuint!(1234567891011121314151617181920) & infuint!(1234567891011121314151617181920)
+                == infuint!(1234567891011121314151617181920),
+            "{}",
+            infuint!(1234567891011121314151617181920) & infuint!(1234567891011121314151617181920)
+        );
+    }
+
+    #[test]
+    fn test_inf_uint_or() {
+        assert!(
+            infuint!(1234567891011121314151617181920) | infuint!(1234567891011121314151617181920)
+                == infuint!(1234567891011121314151617181920),
+            "{}",
+            infuint!(1234567891011121314151617181920) | infuint!(1234567891011121314151617181920)
+        );
+    }
+
+    #[test]
+    fn test_inf_uint_xor() {
+        assert!(
+            infuint!(1234567891011121314151617181920) ^ infuint!(1234567891011121314151617181920)
+                == infuint!(0),
+            "{}",
+            infuint!(1234567891011121314151617181920) ^ infuint!(1234567891011121314151617181920)
+        );
+    }
+
+    #[test]
+    fn test_inf_uint_shl() {
+        assert!(
+            infuint!(1234567891011121314151617181920) << 1
+                == infuint!(2469135782022242628303234363840),
+            "{}",
+            infuint!(1234567891011121314151617181920) << 1
+        );
+    }
+
+    #[test]
+    fn test_inf_uint_shr() {
+        assert!(
+            infuint!(1234567891011121314151617181920) >> 1
+                == infuint!(617283945505560657075808590960),
+            "{}",
+            infuint!(1234567891011121314151617181920) >> 1
+        );
+    }
+
+    #[test]
+    fn test_inf_uint_not() {
+        assert!(
+            !infuint!(1234567891011121314151617181920) == infuint!(33082709217108087345086023455),
+            "\nL: !{:?}\nR:  {:?}",
+            infuint!(1234567891011121314151617181920),
+            !infuint!(1234567891011121314151617181920)
+        );
+    }
+
     // ====< Benchmarks >====
     #[cfg(feature = "benchmark")]
     #[bench]
-    fn bench_add(b: &mut test::Bencher) {
+    fn bench_inf_uint_add(b: &mut test::Bencher) {
         b.iter(|| {
             let a = infuint!(1234567891011121314151617181920);
             let b = infuint!(1234567891011121314151617181920);
@@ -621,7 +717,7 @@ mod tests {
 
     #[cfg(feature = "benchmark")]
     #[bench]
-    fn bench_sub(b: &mut test::Bencher) {
+    fn bench_inf_uint_sub(b: &mut test::Bencher) {
         b.iter(|| {
             let a = infuint!(1234567891011121314151617181920);
             let b = infuint!(1234567891011121314151617181920);
@@ -631,7 +727,7 @@ mod tests {
 
     #[cfg(feature = "benchmark")]
     #[bench]
-    fn bench_mul(b: &mut test::Bencher) {
+    fn bench_inf_uint_mul(b: &mut test::Bencher) {
         b.iter(|| {
             let a = infuint!(1234567891011121314151617181920);
             let b = infuint!(1234567891011121314151617181920);
@@ -641,7 +737,7 @@ mod tests {
 
     #[cfg(all(feature = "benchmark", feature = "opt"))]
     #[bench]
-    fn bench_mul_2_opt(b: &mut test::Bencher) {
+    fn bench_inf_uint_mul_2_opt(b: &mut test::Bencher) {
         b.iter(|| {
             let a = infuint!(1234567891011121314151617181920);
             let b = infuint!(2);
@@ -651,7 +747,7 @@ mod tests {
 
     #[cfg(feature = "benchmark")]
     #[bench]
-    fn bench_div(b: &mut test::Bencher) {
+    fn bench_inf_uint_div(b: &mut test::Bencher) {
         b.iter(|| {
             let a = infuint!(100000);
             let b = infuint!(100);
@@ -661,7 +757,7 @@ mod tests {
 
     #[cfg(all(feature = "benchmark", feature = "opt"))]
     #[bench]
-    fn bench_div_2_opt(b: &mut test::Bencher) {
+    fn bench_inf_uint_div_2_opt(b: &mut test::Bencher) {
         b.iter(|| {
             let a = infuint!(1234567891011121314151617181920);
             let b = infuint!(2);

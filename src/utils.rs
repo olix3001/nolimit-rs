@@ -114,9 +114,7 @@ pub fn replace_nth_char(s: &String, idx: usize, newchar: char) -> String {
 #[macro_export]
 macro_rules! fit_bits {
     ($bits:expr) => {
-        $bits.reverse();
         $bits.resize($bits.len() - $bits.trailing_zeros(), false);
-        $bits.reverse()
     };
 }
 
